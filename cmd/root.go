@@ -424,7 +424,11 @@ func handleArgs(args []string) string {
 	if len(args) == 1 {
 		target := args[0]
 
-		cwd = path.Clean(path.Join(cwd, target))
+		if path.IsAbs(target) {
+			cwd = target
+		} else {
+			cwd = path.Clean(path.Join(cwd, target))
+		}
 	}
 
 	if err := os.Chdir(cwd); err != nil {
