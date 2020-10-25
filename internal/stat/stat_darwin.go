@@ -39,8 +39,8 @@ func NewPlatformStat(f os.FileInfo) PlatformStat {
 	return PlatformStat{f.Sys().(*syscall.Stat_t)}
 }
 
-func (s PlatformStat) Links() uint16 {
-	return s.inner.Nlink
+func (s PlatformStat) Links() uint64 {
+	return uint64(s.inner.Nlink)
 }
 
 func (s PlatformStat) INode() uint64 {

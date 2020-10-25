@@ -286,7 +286,7 @@ func formatGroupname(group string) string {
 	return Gray(9, group).String()
 }
 
-func formatLinks(links uint16) string {
+func formatLinks(links uint64) string {
 	return fmt.Sprint(links)
 }
 

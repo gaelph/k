@@ -39,7 +39,7 @@ func NewPlatformStat(f os.FileInfo) PlatformStat {
 	return PlatformStat{f.Sys().(*syscall.Stat_t)}
 }
 
-func (s PlatformStat) Links() uint16 {
+func (s PlatformStat) Links() uint64 {
 	return s.inner.Nlink
 }
 
@@ -97,6 +97,6 @@ func (s PlatformStat) Blocks() int64 {
 	return s.inner.Blocks
 }
 
-func (s PlatformStat) BlockSize() int32 {
+func (s PlatformStat) BlockSize() int64 {
 	return s.inner.Blksize
 }
