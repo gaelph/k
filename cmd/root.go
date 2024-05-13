@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,12 +17,13 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/muesli/termenv"
 
 	"github.com/gaelph/k/internal/git"
 	"github.com/gaelph/k/internal/numfmt"
@@ -46,47 +47,81 @@ type FileDscr struct {
 	stat     PlatformStat
 }
 
+var darkSize = []uint8{
+	46,
+	82,
+	118,
+	154,
+	190,
+	226,
+	220,
+	214,
+	208,
+	202,
+	196, // default
+}
+
+var lightSize = []uint8{
+	34,
+	70,
+	106,
+	142,
+	178,
+	214,
+	208,
+	202,
+	196,
+	160,
+	184, // default
+}
+
 // Return the color for a file size
 func SizeToColor(size int64) uint8 {
+	colors := lightSize
+	isDark := termenv.DefaultOutput().HasDarkBackground()
+	if isDark {
+		colors = darkSize
+	}
+
 	// 1kB
 	if size <= 1024 {
-		return 46
+		return colors[0]
 	}
 	// 2kB
 	if size <= 2048 {
-		return 82
+		return colors[1]
 	}
 	// 3kB
 	if size <= 3072 {
-		return 118
+		return colors[2]
 	}
 	// 5kB
 	if size <= 5120 {
-		return 154
+		return colors[3]
 	}
 	// 10kB
 	if size <= 10240 {
-		return 190
+		return colors[4]
 	}
 	// 20kB
 	if size <= 20480 {
-		return 226
+		return colors[5]
 	}
 	// 40kB
 	if size <= 40960 {
-		return 220
+		return colors[6]
 	}
 	// 100kB
 	if size <= 102400 {
-		return 214
+		return colors[7]
 	}
 	// 256kB
 	if size <= 262144 {
-		return 208
+		return colors[8]
 	}
 	// 512kB
 	if size <= 524288 {
-		return 202
+		return colors[9]
 	}
 
 	return 196
@@ -99,50 +134,81 @@ func formatNumber(num int64) string {
 	result := fmt.Sprint(num)
 
 	if *humanReadableSize {
-
 		result = numfmt.NumFmt(result, *siSize)
 	}
 
 	return result
 }
 
+var darkTime = []uint8{
+	196,
+	255,
+	252,
+	250,
+	244,
+	244,
+	242,
+	240,
+	238,
+}
+
+var lightTime = []uint8{
+	196,
+	232,
+	235,
+	237,
+	243,
+	243,
+	245,
+	247,
+	249,
+}
+
 // Formats and colors time
 // Colors are relative to now
 // TODO: accept Now as a param so that
-//       all lines have the same reference
 //
-//           0 196  # < in the future, #spooky
-//          60 255  # < less than a min old
-//        3600 252  # < less than an hour old
-//       86400 250  # < less than 1 day old
-//      604800 244  # < less than 1 week old
-//     2419200 244  # < less than 28 days (4 weeks) old
-//    15724800 242  # < less than 26 weeks (6 months) old
-//    31449600 240  # < less than 1 year old
-//    62899200 238  # < less than 2 years old
+//	   all lines have the same reference
+//
+//	       0 196  # < in the future, #spooky
+//	      60 255  # < less than a min old
+//	    3600 252  # < less than an hour old
+//	   86400 250  # < less than 1 day old
+//	  604800 244  # < less than 1 week old
+//	 2419200 244  # < less than 28 days (4 weeks) old
+//	15724800 242  # < less than 26 weeks (6 months) old
+//	31449600 240  # < less than 1 year old
+//	62899200 238  # < less than 2 years old
 func formatTime(t time.Time) string {
+	is_dark := termenv.DefaultOutput().HasDarkBackground()
 	str := t.Format("_2 Jan") + "   " + t.Format("15:04")
 	secs := time.Now().Unix() - t.Unix()
-	var color uint8 = 236
+	var color uint8 = 252
+
+	colors := lightTime
+	if is_dark {
+		colors = darkTime
+		color = 236
+	}
 
 	if secs <= 0 {
-		color = 196
+		color = colors[0]
 	} else if secs <= 60 {
-		color = 255
+		color = colors[1]
 	} else if secs <= 3600 {
-		color = 252
+		color = colors[2]
 	} else if secs <= 86400 {
-		color = 250
+		color = colors[3]
 	} else if secs <= 604800 {
-		color = 244
+		color = colors[4]
 	} else if secs <= 2419200 {
-		color = 244
+		color = colors[5]
 	} else if secs <= 15724800 {
-		color = 242
+		color = colors[6]
 	} else if secs <= 31449600 {
-		color = 240
+		color = colors[7]
 	} else if secs <= 62899200 {
-		color = 238
+		color = colors[8]
 	}
 
 	return aurora.Index(color, str).String()
@@ -165,19 +231,25 @@ func symlinkTarget(fd FileDscr) string {
 // TODO: use $LSCOLORS on macOS
 // Gxfxcxdxbxegedabagacad
 // case $foreground in
-//     a) foreground_ansi=30;;
-//     b) foreground_ansi=31;;
-//     c) foreground_ansi=32;;
-//     d) foreground_ansi=33;;
-//     e) foreground_ansi=34;;
-//     f) foreground_ansi=35;;
-//     g) foreground_ansi=36;;
-//     h) foreground_ansi=37;;
-//     x) foreground_ansi=0;;
-//   esac
+//
+//	  a) foreground_ansi=30;;
+//	  b) foreground_ansi=31;;
+//	  c) foreground_ansi=32;;
+//	  d) foreground_ansi=33;;
+//	  e) foreground_ansi=34;;
+//	  f) foreground_ansi=35;;
+//	  g) foreground_ansi=36;;
+//	  h) foreground_ansi=37;;
+//	  x) foreground_ansi=0;;
+//	esac
 func formatFilename(fd FileDscr, branch string) string {
 	mode := fd.fileInfo.Mode()
 	perm := mode.Perm()
+	isDark := termenv.DefaultOutput().HasDarkBackground()
+	var bg uint8 = 0
+	if !isDark {
+		bg = 15
+	}
 
 	if mode.IsDir() {
 		dirname := fd.name
@@ -185,22 +257,23 @@ func formatFilename(fd FileDscr, branch string) string {
 		if perm&0002 == 0002 {
 			if mode&os.ModeSticky == os.ModeSticky {
 				dirname = aurora.Index(0, fd.name).BgIndex(2).String()
+			} else {
+				dirname = aurora.Index(0, fd.name).BgIndex(3).String()
 			}
-			dirname = aurora.Index(0, fd.name).BgIndex(3).String()
 		}
 		return dirname + " " + Gray(9, branch).String()
 	}
 
 	if mode&os.ModeSymlink == os.ModeSymlink {
-		return aurora.Index(5, fd.name).BgIndex(0).String() + symlinkTarget(fd)
+		return aurora.Index(5, fd.name).BgIndex(bg).String() + symlinkTarget(fd)
 	}
 
 	if mode&os.ModeSocket == os.ModeSocket {
-		return aurora.Index(2, fd.name).BgIndex(0).String()
+		return aurora.Index(2, fd.name).BgIndex(bg).String()
 	}
 
 	if mode&os.ModeNamedPipe == os.ModeNamedPipe {
-		return aurora.Index(3, fd.name).BgIndex(0).String()
+		return aurora.Index(3, fd.name).BgIndex(bg).String()
 	}
 
 	if mode&os.ModeDevice == os.ModeDevice {
@@ -234,48 +307,70 @@ func vcsSatus(fd FileDscr, insideVCS bool) (string, string) {
 	return git.Status(fd.fullpath, fd.fileInfo, insideVCS)
 }
 
+var darkVCS = map[string]uint8{
+	"DG":      46,
+	" M":      1,
+	"M ":      82,
+	"??":      214,
+	"!!":      238,
+	"A ":      82,
+	"default": 86,
+}
+
+var lightVCS = map[string]uint8{
+	"DG":      34,
+	" M":      9,
+	"M ":      70,
+	"??":      202,
+	"!!":      250,
+	"A ":      70,
+	"default": 74,
+}
+
+var singsVCS = map[string]string{
+	// Directory Good
+	// when out of a repo, but the directory is one
+	"DG": "|",
+	// Dirty
+	" M": "+",
+	// Dirty+Added
+	"M ": "+",
+	// Untracked
+	"??": "+",
+	// Dirty
+	"!!": "|",
+	// Added
+	"A ": "+",
+	// Other cases
+	"default": "|",
+}
+
+func hasKey[K comparable, V any](m map[K]V, key K) bool {
+	_, ok := m[key]
+	return ok
+}
+
 // Colors the VCS status marker
 func formatVCSStatus(status string) string {
 	if *noVCS {
 		return ""
 	}
 
-	switch status {
-	// Directory Good
-	// when out of a repo, but the directory is one
-	case "DG":
-		return aurora.Index(46, "|").String()
-
-		// Dirty
-	case " M":
-		return aurora.Index(1, "+").String()
-
-		// Dirty+Added
-	case "M ":
-		return aurora.Index(82, "+").String()
-
-		// Untracked
-	case "??":
-		return aurora.Index(214, "+").String()
-
-		// Ignored
-	case "!!":
-		return aurora.Index(238, "|").String()
-
-		// Added
-	case "A ":
-		return aurora.Index(82, "+").String()
-
-		// Not a repo
-		// when out of a repo
-	case "--":
+	if status == "--" {
 		return " "
-
-		// Good
-	default:
-		return aurora.Index(82, "|").String()
 	}
 
+	isDark := termenv.DefaultOutput().HasDarkBackground()
+	colors := lightVCS
+	if isDark {
+		colors = darkVCS
+	}
+
+	if hasKey(colors, status) && hasKey(singsVCS, status) {
+		return aurora.Index(colors[status], singsVCS[status]).String()
+	}
+
+	return aurora.Index(colors["default"], singsVCS["default"]).String()
 }
 
 func formatUsername(username string) string {
@@ -324,7 +419,7 @@ func PrintLine(writer *tabwriter.Writer, f FileDscr, insideVCS bool) {
 
 // Returns whether a line should be printed for a file
 // accordinf to flags
-func shouldPrint(name string, f os.FileInfo) bool {
+func shouldPrint(name string, f os.DirEntry) bool {
 	isDir := f.IsDir()
 	isHidden := strings.HasPrefix(name, ".")
 	showHidden := *listAlmostAll || *listAll
@@ -439,7 +534,7 @@ func handleArgs(args []string) string {
 }
 
 func getDescriptors(cwd string) []FileDscr {
-	files, err := ioutil.ReadDir(cwd)
+	files, err := os.ReadDir(cwd)
 	if err != nil {
 		panic(err)
 	}
@@ -470,12 +565,17 @@ func getDescriptors(cwd string) []FileDscr {
 
 	// Actual file list
 	for _, file := range files {
+		fileInfo, err := file.Info()
+		if err != nil {
+			continue
+		}
+
 		if shouldPrint(file.Name(), file) {
 			descriptors = append(descriptors, FileDscr{
 				file.Name(),
 				path.Join(cwd, file.Name()),
-				file,
-				NewPlatformStat(file),
+				fileInfo,
+				NewPlatformStat(fileInfo),
 			})
 		}
 	}
@@ -505,7 +605,14 @@ on files and directories.`,
 
 		insideVCS := git.IsInWorkTree()
 
-		writer := tabwriter.NewWriter(os.Stdout, 0, 4, 1, ' ', tabwriter.AlignRight)
+		writer := tabwriter.NewWriter(
+			os.Stdout,
+			0,
+			4,
+			1,
+			' ',
+			tabwriter.AlignRight,
+		)
 
 		var blocks int64 = 0
 		for _, d := range descriptors {
@@ -532,43 +639,55 @@ func Execute() {
 	}
 }
 
-var listAll *bool
-var listAlmostAll *bool
-var sortCtime *bool
-var listDirectories *bool
-var dontListDirectories *bool
-var humanReadableSize *bool
-var siSize *bool
-var reverseSort *bool
-var sortSize *bool
-var sortModTime *bool
-var sortAtime *bool
-var dontSort *bool
-var sortBy string
-var noVCS *bool
+var (
+	listAll             *bool
+	listAlmostAll       *bool
+	sortCtime           *bool
+	listDirectories     *bool
+	dontListDirectories *bool
+	humanReadableSize   *bool
+	siSize              *bool
+	reverseSort         *bool
+	sortSize            *bool
+	sortModTime         *bool
+	sortAtime           *bool
+	dontSort            *bool
+	sortBy              string
+	noVCS               *bool
+)
 
 func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	listAll = rootCmd.Flags().BoolP("all", "a", false, "list entries starting .")
-	listAlmostAll = rootCmd.Flags().BoolP("almost-all", "A", false, "list all except . and ..")
+	listAll = rootCmd.Flags().
+		BoolP("all", "a", false, "list entries starting .")
+	listAlmostAll = rootCmd.Flags().
+		BoolP("almost-all", "A", false, "list all except . and ..")
 	sortCtime = rootCmd.Flags().BoolP("ctime", "c", false, "sort by ctime")
-	listDirectories = rootCmd.Flags().BoolP("directories", "d", false, "list only directories")
-	dontListDirectories = rootCmd.Flags().BoolP("no-directories", "n", false, "do not list directories")
-	humanReadableSize = rootCmd.Flags().BoolP("human", "H", false, "show file sizes in human readable format")
-	siSize = rootCmd.Flags().Bool("si", false, "with -h, use powers of 1000 not 1024")
-	reverseSort = rootCmd.Flags().BoolP("reverse", "r", false, "reverse sort order")
+	listDirectories = rootCmd.Flags().
+		BoolP("directories", "d", false, "list only directories")
+	dontListDirectories = rootCmd.Flags().
+		BoolP("no-directories", "n", false, "do not list directories")
+	humanReadableSize = rootCmd.Flags().
+		BoolP("human", "H", false, "show file sizes in human readable format")
+	siSize = rootCmd.Flags().
+		Bool("si", false, "with -h, use powers of 1000 not 1024")
+	reverseSort = rootCmd.Flags().
+		BoolP("reverse", "r", false, "reverse sort order")
 	sortSize = rootCmd.Flags().BoolP("size", "S", false, "sort by size")
-	sortModTime = rootCmd.Flags().BoolP("time", "t", false, "sort by modification time")
-	sortAtime = rootCmd.Flags().BoolP("atime", "u", false, "sort by atime (use of access time)")
+	sortModTime = rootCmd.Flags().
+		BoolP("time", "t", false, "sort by modification time")
+	sortAtime = rootCmd.Flags().
+		BoolP("atime", "u", false, "sort by atime (use of access time)")
 	dontSort = rootCmd.Flags().BoolP("unsorted", "U", false, "unsorted")
 
-	rootCmd.Flags().String("sort", "n", "sort by WORD: none (U), size (s),\ntime (t), ctime or status (c),\natime or access time or use (a)")
+	rootCmd.Flags().
+		String("sort", "n", "sort by WORD: none (U), size (s),\ntime (t), ctime or status (c),\natime or access time or use (a)")
 
-	noVCS = rootCmd.Flags().Bool("no-vcs", false, "do not get VCS stats (much faster)")
-
+	noVCS = rootCmd.Flags().
+		Bool("no-vcs", false, "do not get VCS stats (much faster)")
 }
 
 // initConfig reads in config file and ENV variables if set.
